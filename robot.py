@@ -1,10 +1,6 @@
 import requests
 import json
 
-DINGDING_ROBOT = 'https://oapi.dingtalk.com/robot/send?access_token=5b4243f85a7f72741ae8d4ba09021ee00d933ffe2efdd165cda2db7a58144d3d'
-
-
-
 class MessageFactory:
     @classmethod
     def make_a_message1(cls):
@@ -121,12 +117,49 @@ class MessageFactory:
         }
         return data
 
+import time
+import hmac
+import hashlib
+import base64
+
+def calculate_timestamp_sign(secret):
+    timestamp = int(round(time.time() * 1000))
+    # secret = 'this is secret'
+    secret_enc = secret.encode('utf-8')
+    string_to_sign = '{}\n{}'.format(timestamp, secret)
+    string_to_sign_enc = string_to_sign.encode('utf-8')
+    hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
+    sign = base64.b64encode(hmac_code)
+    print(timestamp)
+    print(type(timestamp))
+    print(sign)
+    print(type(sign))
+    return timestamp, sign
 
 
-def notify(info):
-    url = DINGDING_ROBOT
+def notify(robot_url, access_token, info):
     headers = {'Content-Type': 'application/json;charset=utf-8'}
-    r = requests.post(url, headers=headers, data=json.dumps(info))
+    params = {
+        "access_token": access_token,
+    }
+    r = requests.post(robot_url, params=params, headers=headers, data=json.dumps(info))
+    print(r.text)
+    if r.status_code == 200:
+        jo = json.loads(r.text)
+        if jo['errcode'] == 0:
+            return True
+    return False
+
+def notify_with_sig(robot_url, access_token, secret, info):
+    headers = {'Content-Type': 'application/json;charset=utf-8'}
+    timestamp, sign = calculate_timestamp_sign(secret)
+    params = {
+        "access_token": access_token,
+        "timestamp": timestamp,
+        "sign": sign
+    }
+    r = requests.post(robot_url, headers=headers, params=params, data=json.dumps(info))
+    print(r.text)
     if r.status_code == 200:
         jo = json.loads(r.text)
         if jo['errcode'] == 0:
@@ -141,9 +174,18 @@ if __name__ == "__main__":
     msg4 = MessageFactory.make_a_message4()
     msg5 = MessageFactory.make_a_message5()
     msg6 = MessageFactory.make_a_message6()
-    notify(msg1)
-    notify(msg2)
-    notify(msg3)
-    notify(msg4)
-    notify(msg5)
-    notify(msg6)
+
+    # robot1
+    robot_url = 'https://oapi.dingtalk.com/robot/send'
+    access_token = "5b4243f85a7f72741ae8d4ba09021ee00d933ffe2efdd165cda2db7a58144d3d"
+    notify(robot_url, access_token, msg1)
+    notify(robot_url, access_token, msg2)
+    notify(robot_url, access_token, msg3)
+    notify(robot_url, access_token, msg4)
+    notify(robot_url, access_token, msg5)
+    notify(robot_url, access_token, msg6)
+
+    # robot2, with signature
+    access_token = "3aec9d508f8d677568bc7e60b32784ee3f6536646908b39eddee8c0b5e68ea81"
+    secret = 'SECb4d978eff0597e2d2d9a69c883d7ac6734dfe48f105b3a40b6586a4b5625887a'
+    notify_with_sig(robot_url, access_token, secret, msg6)
